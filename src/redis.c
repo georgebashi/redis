@@ -52,6 +52,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <sys/resource.h>
+#include "lua.h"
 
 /* Our shared "common" objects */
 
@@ -187,7 +188,9 @@ struct redisCommand readonlyCommandTable[] = {
     {"punsubscribe",punsubscribeCommand,-1,0,NULL,0,0,0},
     {"publish",publishCommand,3,REDIS_CMD_FORCE_REPLICATION,NULL,0,0,0},
     {"watch",watchCommand,-2,0,NULL,0,0,0},
-    {"unwatch",unwatchCommand,1,0,NULL,0,0,0}
+    {"unwatch",unwatchCommand,1,0,NULL,0,0,0},
+    {"luaexec",luaexecCommand,2,REDIS_CMD_FORCE_REPLICATION|REDIS_CMD_DENYOOM,NULL,0,0,0},
+    {"luaexeckey",luaexeckeyCommand,2,REDIS_CMD_FORCE_REPLICATION|REDIS_CMD_DENYOOM,NULL,1,1,1}
 };
 
 /*============================ Utility functions ============================ */
@@ -1528,6 +1531,7 @@ int main(int argc, char **argv) {
     if (server.daemonize) daemonize();
     initServer();
     if (server.daemonize) createPidFile();
+    initLua();
     redisLog(REDIS_NOTICE,"Server started, Redis version " REDIS_VERSION);
 #ifdef __linux__
     linuxOvercommitMemoryWarning();
