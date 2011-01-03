@@ -77,14 +77,16 @@ void luaGenericExecCommand(redisClient *c, const char *code) {
         return;
     }
 
-    if ((err = lua_pcall(luaState, 0, LUA_MULTRET, 0))) {
-        sds luamsg = sdsnew("-ERR Lua error: ");
-        luamsg = sdscat(luamsg, lua_tostring(luaState, -1));
-        addReply(c, createObject(REDIS_STRING, luamsg));
-        return;
+    sds output;
+    if ((err = lua_pcall(luaState, 0, 1, 0))) {
+        output = sdsnew("-ERR Lua error: ");
+        output = sdscat(output, lua_tostring(luaState, -1));
+    } else {
+        output = sdsnew(lua_tostring(luaState, -1));
     }
-
-    addReply(c, shared.nullbulk);
+    addReply(c,shared.plus);
+    addReply(c, createObject(REDIS_STRING, output));
+    addReply(c,shared.crlf);
 }
 
 int luaExecRedisCommand(lua_State *L) {
