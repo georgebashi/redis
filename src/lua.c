@@ -99,7 +99,7 @@ int luaExecRedisCommand(lua_State *L) {
     fakeClient->argc = nargs;
     fakeClient->argv = zmalloc(sizeof(robj) * nargs);
     for (int i = 0; i < nargs; i++) {
-        char *param = lua_tostring(L, i + 1);
+        const char *param = lua_tostring(L, i + 1);
         fakeClient->argv[i] = createStringObject(param, strlen(param));
     }
     fakeClient->cmdState = L;
