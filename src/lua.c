@@ -5,9 +5,13 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+// lua interpretter state
 lua_State *luaState;
+
+// a fake client, used to capture command replies
 redisClient *fakeClient;
 
+// wrapper function to allow lua to use our zalloc
 static void *luaZalloc (void *ud, void *ptr, size_t osize, size_t nsize) {
     (void)ud;
     (void)osize;
@@ -19,6 +23,7 @@ static void *luaZalloc (void *ud, void *ptr, size_t osize, size_t nsize) {
         return zrealloc(ptr, nsize);
 }
 
+// last-chance lua error capture
 static int luaPanic (lua_State *L) {
     (void)L;  /* to avoid warnings */
     redisPanic(sprintf("PANIC: unprotected error in call to Lua API (%s)\n",
@@ -26,7 +31,10 @@ static int luaPanic (lua_State *L) {
     return 0;
 }
 
+// set up the lua interpretter, called when redis starts
 void initLua(void) {
+    // allocate and initialize just the essential parts
+    // of our fake client
     fakeClient = zmalloc(sizeof(redisClient));
     selectDb(fakeClient, 0);
     fakeClient->flags = REDIS_LUA;
@@ -42,6 +50,7 @@ void initLua(void) {
     lua_atpanic(luaState, &luaPanic);
     luaL_openlibs(luaState);
 
+    // provide lua script with a hook to call redis commands
     lua_pushcfunction(luaState, luaExecRedisCommand);
     lua_setglobal(luaState, "redis");
 }
@@ -65,9 +74,11 @@ void luaexeckeyCommand(redisClient *c) {
     luaGenericExecCommand(c, o->ptr);
 }
 
+// execute lua code
 void luaGenericExecCommand(redisClient *c, const char *code) {
     int err;
 
+    // load the code into lua
     if ((err = luaL_loadstring(luaState, code))) {
         if (err == LUA_ERRSYNTAX) {
             addReply(c, shared.syntaxerr);
@@ -77,6 +88,7 @@ void luaGenericExecCommand(redisClient *c, const char *code) {
         return;
     }
 
+    // call the lua code, capturing output / error
     sds output;
     if ((err = lua_pcall(luaState, 0, 1, 0))) {
         output = sdsnew("-ERR Lua error: ");
@@ -84,20 +96,26 @@ void luaGenericExecCommand(redisClient *c, const char *code) {
     } else {
         output = sdsnew(lua_tostring(luaState, -1));
     }
+
+    // send the lua output back as a single string
+    // TODO handle multiple return values
     addReply(c,shared.plus);
     addReplySds(c, output);
     addReply(c,shared.crlf);
 }
 
+// lua hook to execute redis commands
 int luaExecRedisCommand(lua_State *L) {
+    // find the redis command and check arity
     int nargs = lua_gettop(L);
     const char *cmdname = lua_tostring(L, 1);
-
     struct redisCommand *cmd = lookupCommandByCString(cmdname);
     if (nargs != cmd->arity) {
         lua_pushstring(L, "incorrect number of arguments");
         lua_error(L);
     }
+
+    // set up argc and argv as if they'd been read from a real client
     fakeClient->argc = nargs;
     fakeClient->argv = zmalloc(sizeof(robj) * nargs);
     for (int i = 0; i < nargs; i++) {
@@ -107,6 +125,7 @@ int luaExecRedisCommand(lua_State *L) {
     fakeClient->cmdState = L;
     lua_pop(L, nargs);
 
+    // execute the redis command
     call(fakeClient, cmd);
     for (int i = 0; i < nargs; i++) {
         decrRefCount(fakeClient->argv[i]);
