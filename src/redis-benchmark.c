@@ -465,6 +465,10 @@ int main(int argc, char **argv) {
         benchmark("PING",cmd,len);
         free(cmd);
 
+        len = redisFormatCommand(&cmd,"LUAEXEC redis('ping')");
+        benchmark("PING (Lua)",cmd,len);
+        free(cmd);
+
         const char *argv[21];
         argv[0] = "MSET";
         for (i = 1; i < 21; i += 2) {

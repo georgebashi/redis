@@ -1,5 +1,6 @@
 #include "redis.h"
 #include <sys/uio.h>
+#include "lua.h"
 
 void *dupClientReplyValue(void *o) {
     incrRefCount((robj*)o);
@@ -166,6 +167,11 @@ void _addReplyStringToList(redisClient *c, char *s, size_t len) {
 }
 
 void addReply(redisClient *c, robj *obj) {
+    if (c->flags & REDIS_LUA) {
+        luaReturnObject(c, obj);
+        return;
+    }
+
     if (_installWriteEvent(c) != REDIS_OK) return;
     redisAssert(!server.vm_enabled || obj->storage == REDIS_VM_MEMORY);
 

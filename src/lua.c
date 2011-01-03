@@ -29,6 +29,9 @@ static int luaPanic (lua_State *L) {
 void initLua(void) {
     fakeClient = zmalloc(sizeof(redisClient));
     selectDb(fakeClient, 0);
+    fakeClient->flags = REDIS_LUA;
+    fakeClient->returned_values = 0;
+    fakeClient->cmdState = NULL;
 
     luaState = lua_newstate(luaZalloc, NULL);
     if (!luaState) {
@@ -63,6 +66,8 @@ void luaexeckeyCommand(redisClient *c) {
 void luaGenericExecCommand(redisClient *c, const char *code) {
     int err;
 
+    c->returned_values = 0;
+
     if ((err = luaL_loadstring(luaState, code))) {
         if (err == LUA_ERRSYNTAX) {
             addReply(c, shared.syntaxerr);
@@ -78,6 +83,8 @@ void luaGenericExecCommand(redisClient *c, const char *code) {
         addReply(c, createObject(REDIS_STRING, luamsg));
         return;
     }
+
+    addReply(c, shared.nullbulk);
 }
 
 int luaExecRedisCommand(lua_State *L) {
@@ -95,9 +102,30 @@ int luaExecRedisCommand(lua_State *L) {
         char *param = lua_tostring(L, i + 1);
         fakeClient->argv[i] = createStringObject(param, strlen(param));
     }
+    fakeClient->cmdState = L;
+    lua_pop(L, nargs);
+    fakeClient->returned_values = 0;
 
     call(fakeClient, cmd);
+    for (int i = 0; i < nargs; i++) {
+        decrRefCount(fakeClient->argv[i]);
+    }
+    zfree(fakeClient->argv);
+    fakeClient->argv = NULL;
 
-    return 0;
+    return fakeClient->returned_values;
+}
+
+void luaReturnObject(redisClient *c, robj *obj) {
+    robj *decoded = getDecodedObject(obj);
+
+    if (obj->type == REDIS_STRING) {
+        lua_pushstring(c->cmdState, decoded->ptr);
+    } else {
+        redisLog(REDIS_NOTICE, "unhandled type");
+    }
+    decrRefCount(decoded);
+
+    c->returned_values++;
 }
 
