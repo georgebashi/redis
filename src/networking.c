@@ -61,6 +61,7 @@ redisClient *createClient(int fd) {
 /* Set the event loop to listen for write events on the client's socket.
  * Typically gets called every time a reply is built. */
 int _installWriteEvent(redisClient *c) {
+    if (c->flags & REDIS_LUA) { return REDIS_OK; }
     /* When CLOSE_AFTER_REPLY is set, no more replies may be added! */
     redisAssert(!(c->flags & REDIS_CLOSE_AFTER_REPLY));
 
@@ -167,11 +168,6 @@ void _addReplyStringToList(redisClient *c, char *s, size_t len) {
 }
 
 void addReply(redisClient *c, robj *obj) {
-    if (c->flags & REDIS_LUA) {
-        luaReturnObject(c, obj);
-        return;
-    }
-
     if (_installWriteEvent(c) != REDIS_OK) return;
     redisAssert(!server.vm_enabled || obj->storage == REDIS_VM_MEMORY);
 

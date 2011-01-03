@@ -342,7 +342,6 @@ typedef struct redisClient {
     char buf[REDIS_REPLY_CHUNK_BYTES];
 
     lua_State *cmdState;
-    int returned_values;
 } redisClient;
 
 struct saveparam {

@@ -30,8 +30,10 @@ void initLua(void) {
     fakeClient = zmalloc(sizeof(redisClient));
     selectDb(fakeClient, 0);
     fakeClient->flags = REDIS_LUA;
-    fakeClient->returned_values = 0;
     fakeClient->cmdState = NULL;
+    fakeClient->reply = listCreate();
+    listSetFreeMethod(fakeClient->reply,decrRefCount);
+    listSetDupMethod(fakeClient->reply,dupClientReplyValue);
 
     luaState = lua_newstate(luaZalloc, NULL);
     if (!luaState) {
@@ -66,8 +68,6 @@ void luaexeckeyCommand(redisClient *c) {
 void luaGenericExecCommand(redisClient *c, const char *code) {
     int err;
 
-    c->returned_values = 0;
-
     if ((err = luaL_loadstring(luaState, code))) {
         if (err == LUA_ERRSYNTAX) {
             addReply(c, shared.syntaxerr);
@@ -85,7 +85,7 @@ void luaGenericExecCommand(redisClient *c, const char *code) {
         output = sdsnew(lua_tostring(luaState, -1));
     }
     addReply(c,shared.plus);
-    addReply(c, createObject(REDIS_STRING, output));
+    addReplySds(c, output);
     addReply(c,shared.crlf);
 }
 
@@ -106,7 +106,6 @@ int luaExecRedisCommand(lua_State *L) {
     }
     fakeClient->cmdState = L;
     lua_pop(L, nargs);
-    fakeClient->returned_values = 0;
 
     call(fakeClient, cmd);
     for (int i = 0; i < nargs; i++) {
@@ -115,19 +114,17 @@ int luaExecRedisCommand(lua_State *L) {
     zfree(fakeClient->argv);
     fakeClient->argv = NULL;
 
-    return fakeClient->returned_values;
-}
-
-void luaReturnObject(redisClient *c, robj *obj) {
-    robj *decoded = getDecodedObject(obj);
-
-    if (obj->type == REDIS_STRING) {
-        lua_pushstring(c->cmdState, decoded->ptr);
-    } else {
-        redisLog(REDIS_NOTICE, "unhandled type");
+    // read the response and return to lua
+    int returnedValues = 0;
+    listNode *node;
+    while (listLength(fakeClient->reply)) {
+        node = listFirst(fakeClient->reply);
+        robj *o = listNodeValue(node);
+        lua_pushstring(L, o->ptr);
+        listDelNode(fakeClient->reply, node);
+        returnedValues++;
     }
-    decrRefCount(decoded);
 
-    c->returned_values++;
+    return returnedValues;
 }
 
