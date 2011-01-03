@@ -18,7 +18,6 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <syslog.h>
-#include <lua.h>
 
 #include "ae.h"     /* Event driven programming library */
 #include "sds.h"    /* Dynamic safe strings */
@@ -340,8 +339,6 @@ typedef struct redisClient {
     /* Response buffer */
     int bufpos;
     char buf[REDIS_REPLY_CHUNK_BYTES];
-
-    lua_State *cmdState;
 } redisClient;
 
 struct saveparam {

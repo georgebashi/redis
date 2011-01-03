@@ -38,7 +38,6 @@ void initLua(void) {
     fakeClient = zmalloc(sizeof(redisClient));
     selectDb(fakeClient, 0);
     fakeClient->flags = REDIS_LUA;
-    fakeClient->cmdState = NULL;
     fakeClient->reply = listCreate();
     listSetFreeMethod(fakeClient->reply,decrRefCount);
     listSetDupMethod(fakeClient->reply,dupClientReplyValue);
@@ -122,7 +121,6 @@ int luaExecRedisCommand(lua_State *L) {
         const char *param = lua_tostring(L, i + 1);
         fakeClient->argv[i] = createStringObject(param, strlen(param));
     }
-    fakeClient->cmdState = L;
     lua_pop(L, nargs);
 
     // execute the redis command

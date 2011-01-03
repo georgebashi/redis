@@ -1,6 +1,5 @@
 #include "redis.h"
 #include <sys/uio.h>
-#include "lua.h"
 
 void *dupClientReplyValue(void *o) {
     incrRefCount((robj*)o);
