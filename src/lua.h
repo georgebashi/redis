@@ -7,6 +7,5 @@
 void initLua(void);
 void luaGenericExecCommand(redisClient *c, const char *);
 int luaExecRedisCommand(lua_State *L);
-void luaReturnBuffer(redisClient *c, char *s, size_t len);
 
 #endif
