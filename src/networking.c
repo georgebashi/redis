@@ -90,6 +90,7 @@ robj *dupLastObjectIfNeeded(list *reply) {
 }
 
 int _addReplyToBuffer(redisClient *c, char *s, size_t len) {
+    if (c->flags & REDIS_LUA) { return REDIS_ERR; }
     size_t available = sizeof(c->buf)-c->bufpos;
 
     /* If there already are entries in the reply list, we cannot
